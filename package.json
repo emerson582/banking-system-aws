@@ -1,0 +1,25 @@
+{
+  "name": "banking-system-aws",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1004.0",
+    "@aws-sdk/client-s3": "^3.1004.0",
+    "@aws-sdk/client-secrets-manager": "^3.1004.0",
+    "@aws-sdk/client-sqs": "^3.1004.0",
+    "@aws-sdk/lib-dynamodb": "^3.1004.0",
+    "bcryptjs": "^3.0.3",
+    "uuid": "^13.0.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "register-user",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {},
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.1005.0",
+    "bcryptjs": "^2.4.3"
+  }
+}

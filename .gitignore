@@ -1,0 +1,11 @@
+# Node.js
+node_modules/
+*.log
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# AWS Lambda local
+.env
