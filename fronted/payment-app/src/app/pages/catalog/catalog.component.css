@@ -1,0 +1,46 @@
+.title {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.loading {
+  text-align: center;
+  font-size: 18px;
+}
+
+.table-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.catalog-table {
+  border-collapse: collapse;
+  width: 90%;
+  max-width: 1200px;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.catalog-table th {
+  background-color: #2c3e50;
+  color: white;
+  padding: 12px;
+  text-align: center;
+}
+
+.catalog-table td {
+  padding: 10px;
+  text-align: center;
+  border-bottom: 1px solid #ddd;
+}
+
+.catalog-table tr:hover {
+  background-color: #f5f5f5;
+}
+
+.catalog-table tr:last-child td {
+  border-bottom: none;
+}

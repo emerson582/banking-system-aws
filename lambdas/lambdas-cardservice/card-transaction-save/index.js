@@ -33,19 +33,19 @@ exports.handler = async (event) => {
     if (!card) return { statusCode: 404, body: JSON.stringify({ message: "Tarjeta no encontrada" }) };
 
     const cardType = card.cardType.S.toLowerCase();
-    if (cardType !== "credit") {
-      return { statusCode: 400, body: JSON.stringify({ message: "Solo se puede pagar saldo de tarjeta de crédito" }) };
+    if (cardType !== "debit") {
+      return { statusCode: 400, body: JSON.stringify({ message: "Solo se puede depositar saldo en tarjeta de debito" }) };
     }
 
     let balance = Number(card.amount?.N || 0); // saldo usado
     const createdAt = card.createdAt.S;
 
     // 2️⃣ Validar pago
-    if (amount > balance) {
-      return { statusCode: 400, body: JSON.stringify({ message: "El monto excede el saldo usado" }) };
+    if (amount <= 0) {
+      return { statusCode: 400, body: JSON.stringify({ message: "monto invalido" }) };
     }
 
-    balance -= amount; // nuevo saldo usado
+    balance += amount; // nuevo saldo usado
 
     // 3️⃣ Actualizar balance en CARD_TABLE
     await dynamo.send(new UpdateItemCommand({

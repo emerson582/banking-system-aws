@@ -42,6 +42,7 @@ resource "aws_iam_policy" "card_table_policy" {
         ]
         Resource = [
           "arn:aws:dynamodb:us-east-1:561764227404:table/card-table",
+          "arn:aws:dynamodb:us-east-1:561764227404:table/card-table/index/user-index",
           "arn:aws:dynamodb:us-east-1:561764227404:table/transaction-table"
         ]
       }
@@ -67,7 +68,8 @@ resource "aws_iam_policy" "lambda_policy" {
         ]
         Resource = [
           "arn:aws:dynamodb:us-east-1:561764227404:table/user-table",
-          "arn:aws:dynamodb:us-east-1:561764227404:table/user-table/index/email-index"
+          "arn:aws:dynamodb:us-east-1:561764227404:table/user-table/index/email-index",
+          "arn:aws:dynamodb:us-east-1:561764227404:table/payment-table"
         ]
       },
 
@@ -78,9 +80,29 @@ resource "aws_iam_policy" "lambda_policy" {
           "s3:GetObject",
           "s3:DeleteObject"
         ]
-        Resource = "arn:aws:s3:::banking-system-terraform-bucket-emerson/*"
+        Resource = [
+          "arn:aws:s3:::banking-system-terraform-bucket-emerson/*",
+          "arn:aws:s3:::catalog-bucket-emerson/*"  
+        ]
+        
       }
 
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = "*",
+        Action = "s3:GetObject",
+        Resource = "${aws_s3_bucket.frontend.arn}/*"
+      }
     ]
   })
 }
@@ -102,7 +124,10 @@ resource "aws_iam_policy" "sqs_policy" {
         ]
         Resource = [
           "arn:aws:sqs:us-east-1:561764227404:CardRequestQueue",
-          "arn:aws:sqs:us-east-1:561764227404:notification-email-sqs"
+          "arn:aws:sqs:us-east-1:561764227404:notification-email-sqs",
+          "arn:aws:sqs:us-east-1:561764227404:payment-start-queue",
+          "arn:aws:sqs:us-east-1:561764227404:payment-process-queue"
+          
         ]
       }
     ]
@@ -125,3 +150,9 @@ resource "aws_iam_role_policy_attachment" "sqs_policy_attach" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = aws_iam_policy.sqs_policy.arn
 }
+
+resource "aws_iam_role_policy_attachment" "lambda_vpc_access" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+

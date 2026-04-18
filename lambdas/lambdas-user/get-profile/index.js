@@ -3,6 +3,8 @@ const { DynamoDBClient, GetItemCommand } = require("@aws-sdk/client-dynamodb");
 const client = new DynamoDBClient({ region: "us-east-1" });
 
 exports.handler = async (event) => {
+  console.log("🔥 LAMBDA EJECUTANDOSE");
+  console.log("EVENT:", JSON.stringify(event));
   try {
 
     const userId = event.pathParameters?.user_id;
@@ -23,6 +25,8 @@ exports.handler = async (event) => {
 
     const result = await client.send(command);
 
+    console.log("ITEM COMPLETO:", JSON.stringify(result.Item, null, 2));
+
     if (!result.Item) {
       return {
         statusCode: 404,
@@ -30,15 +34,19 @@ exports.handler = async (event) => {
       };
     }
 
-    const user = {
-      nombre: result.Item.nombre?.S,
-      apellido: result.Item.apellido?.S,
-      email: result.Item.email?.S,
-      telefono: result.Item.telefono?.S,
-      direccion: result.Item.direccion?.S,
-      avatar: result.Item.avatar?.S,
-      document: result.Item.document?.S
-    };
+const getAttr = (attr) =>
+  attr?.S || attr?.N || attr?.BOOL || null;
+
+const user = {
+  nombre: getAttr(result.Item.nombre),
+  apellido: getAttr(result.Item.apellido),
+  email: getAttr(result.Item.email),
+  telefono: getAttr(result.Item.telefono),
+  cardType: getAttr(result.Item.cardType),
+  direccion: getAttr(result.Item.direccion),
+  avatar: getAttr(result.Item.avatar),
+  document: getAttr(result.Item.document)
+};
 
     return {
       statusCode: 200,
@@ -47,6 +55,7 @@ exports.handler = async (event) => {
         profile: user
       })
     };
+    
 
   } catch (error) {
 

@@ -32,3 +32,22 @@ resource "aws_lambda_event_source_mapping" "sqs_to_lambda" {
   batch_size        = 5
   enabled           = true
 }
+
+resource "aws_sqs_queue" "payment_start_queue" {
+  name = "payment-start-queue"
+}
+
+resource "aws_sqs_queue" "payment_process_queue" {
+  name = "payment-process-queue"
+}
+
+resource "aws_lambda_event_source_mapping" "check_balance_trigger" {
+  event_source_arn = aws_sqs_queue.payment_start_queue.arn
+  function_name    = aws_lambda_function.check_balance.arn
+}
+
+resource "aws_lambda_event_source_mapping" "transaction_trigger" {
+  event_source_arn = aws_sqs_queue.payment_process_queue.arn
+  function_name    = aws_lambda_function.transaction.arn
+  batch_size       = 1
+}

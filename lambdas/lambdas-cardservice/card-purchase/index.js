@@ -1,84 +1,141 @@
-const { DynamoDBClient, QueryCommand, UpdateItemCommand, PutItemCommand } = require("@aws-sdk/client-dynamodb");
-const { v4: uuidv4 } = require("uuid"); // para generar UUID
+const {
+  DynamoDBClient,
+  QueryCommand,
+  UpdateItemCommand,
+  PutItemCommand
+} = require("@aws-sdk/client-dynamodb");
 
-const dynamo = new DynamoDBClient({ region: process.env.REGION });
-const CARD_TABLE = process.env.CARD_TABLE;
-const TRANSACTION_TABLE = process.env.TRANSACTION_TABLE;
+const crypto = require("crypto");
+
+const dynamo = new DynamoDBClient({});
 
 exports.handler = async (event) => {
   try {
     const body = JSON.parse(event.body);
-    const { cardId, amount } = body;
+    const { merchant, cardId, amount } = body;
 
-    if (!cardId || !amount) {
-      return { statusCode: 400, body: JSON.stringify({ message: "cardId y amount requeridos" }) };
+    if (!cardId || !amount || amount <= 0) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: "Datos inválidos" })
+      };
     }
 
-    // 1️⃣ Obtener tarjeta
-    const queryParams = {
-      TableName: CARD_TABLE,
-      KeyConditionExpression: "#u = :uuid",
-      ExpressionAttributeNames: { "#u": "uuid" },
-      ExpressionAttributeValues: { ":uuid": { S: cardId } },
+    // 1️⃣ Buscar tarjeta (Query porque tienes sort key)
+    const result = await dynamo.send(new QueryCommand({
+      TableName: process.env.CARD_TABLE,
+      KeyConditionExpression: "#id = :cardId",
+      ExpressionAttributeNames: {
+        "#id": "uuid"
+      },
+      ExpressionAttributeValues: {
+        ":cardId": { S: cardId }
+      },
       Limit: 1
-    };
-    const result = await dynamo.send(new QueryCommand(queryParams));
+    }));
+
     const card = result.Items?.[0];
-    if (!card) return { statusCode: 404, body: JSON.stringify({ message: "Tarjeta no encontrada" }) };
+
+    if (!card) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ message: "Tarjeta no encontrada" })
+      };
+    }
 
     const cardType = card.cardType.S.toLowerCase();
     let balance = Number(card.amount?.N || 0);
-    const limit = Number(card.score?.N || 0);
-    const cardCreatedAt = card.createdAt.S; // nombre distinto para no reasignar
+    let newBalance;
 
-    // 2️⃣ Validar y actualizar balance
+    // =========================
+    // 💳 DÉBITO
+    // =========================
     if (cardType === "debit") {
-      if (balance < amount) return { statusCode: 400, body: JSON.stringify({ message: "Saldo insuficiente" }) };
-      balance -= amount;
-    } else if (cardType === "credit") {
-      if (balance + amount > limit) return { statusCode: 400, body: JSON.stringify({ message: "Límite excedido" }) };
-      balance += amount;
-    } else return { statusCode: 400, body: JSON.stringify({ message: "Tipo de tarjeta inválido" }) };
 
-    // 3️⃣ Actualizar balance en CARD_TABLE
+      if (amount > balance) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Saldo insuficiente" })
+        };
+      }
+
+      newBalance = balance - amount;
+    }
+
+    // =========================
+    // 💳 CRÉDITO
+    // =========================
+    else if (cardType === "credit") {
+
+      const limit = Number(card.limit?.N || 0);
+
+      if ((balance + amount) > limit) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Límite de crédito excedido" })
+        };
+      }
+
+      newBalance = balance + amount;
+    }
+
+    else {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: "Tipo de tarjeta inválido" })
+      };
+    }
+
+    // 2️⃣ Actualizar saldo
     await dynamo.send(new UpdateItemCommand({
-      TableName: CARD_TABLE,
-      Key: { "uuid": { S: cardId }, "createdAt": { S: cardCreatedAt } },
+      TableName: process.env.CARD_TABLE,
+      Key: {
+        uuid: { S: card.uuid.S },
+        createdAt: { S: card.createdAt.S }
+      },
       UpdateExpression: "SET amount = :newBalance",
-      ExpressionAttributeValues: { ":newBalance": { N: balance.toString() } },
-      ReturnValues: "UPDATED_NEW"
-    }));
-
-    // 4️⃣ Registrar transacción en TRANSACTION_TABLE
-    const transactionUuid = uuidv4();
-    const transactionCreatedAt = new Date().toISOString(); // rango de la transacción
-    await dynamo.send(new PutItemCommand({
-      TableName: TRANSACTION_TABLE,
-      Item: {
-        uuid: { S: transactionUuid },               // hash key de la tabla
-        createdAt: { S: transactionCreatedAt },     // range key de la tabla
-        cardId: { S: cardId },
-        type: { S: cardType },
-        amount: { N: amount.toString() },
-        balanceAfter: { N: balance.toString() },
-        merchant: { S: "PURCHASE" }
+      ExpressionAttributeValues: {
+        ":newBalance": { N: newBalance.toString() }
       }
     }));
 
-    // 5️⃣ Respuesta
+    // 3️⃣ Guardar transacción
+    const transactionId = crypto.randomUUID();
+    const createdAtTx = new Date().toISOString();
+
+    await dynamo.send(new PutItemCommand({
+      TableName: process.env.TRANSACTION_TABLE,
+      Item: {
+        uuid: { S: transactionId },
+        createdAt: { S: createdAtTx },
+        cardId: { S: cardId },
+        type: { S: "purchase" },
+        amount: { N: amount.toString() },
+        balanceAfter: { N: newBalance.toString() },
+        merchant: { S: merchant || "unknown" }
+      }
+    }));
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ 
-        message: "Transacción realizada", 
-        cardId, 
-        newBalance: balance, 
-        transactionUuid, 
-        transactionCreatedAt 
+      body: JSON.stringify({
+        message: "Compra realizada",
+        cardId,
+        amount,
+        newBalance,
+        transactionId
       })
     };
 
   } catch (error) {
-    console.error("ERROR PURCHASE TRANSACTION:", error);
-    return { statusCode: 500, body: JSON.stringify({ message: "Error procesando transacción", error: error.message }) };
+    console.error("ERROR PURCHASE:", error);
+
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: "Error procesando compra",
+        error: error.message
+      })
+    };
   }
 };

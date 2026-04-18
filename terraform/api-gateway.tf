@@ -76,6 +76,7 @@ data "archive_file" "get_profile_zip" {
 resource "aws_lambda_function" "get_profile" {
   function_name = "get-profile"
   filename      = data.archive_file.get_profile_zip.output_path
+  source_code_hash = data.archive_file.get_profile_zip.output_base64sha256
   handler       = "index.handler"
   runtime       = "nodejs18.x"
   role          = aws_iam_role.lambda_role.arn
@@ -335,37 +336,37 @@ resource "aws_lambda_permission" "api_gateway_get_cards" {
 }
 
 # Recurso /cards/purchase
-resource "aws_api_gateway_resource" "cards_purchase" {
+resource "aws_api_gateway_resource" "purchase" {
   rest_api_id = aws_api_gateway_rest_api.banking_api.id
-  parent_id   = aws_api_gateway_resource.cards_resource.id # ya tienes /cards
+  parent_id   = aws_api_gateway_resource.transactions_resource.id
   path_part   = "purchase"
 }
 
 # Método POST
-resource "aws_api_gateway_method" "cards_purchase_method" {
+resource "aws_api_gateway_method" "post_purchase_method" {
   rest_api_id   = aws_api_gateway_rest_api.banking_api.id
-  resource_id   = aws_api_gateway_resource.cards_purchase.id
+  resource_id   = aws_api_gateway_resource.purchase.id
   http_method   = "POST"
   authorization = "NONE"
 }
 
 # Integración Lambda
-resource "aws_api_gateway_integration" "cards_purchase_integration" {
-  rest_api_id             = aws_api_gateway_rest_api.banking_api.id
-  resource_id             = aws_api_gateway_resource.cards_purchase.id
-  http_method             = aws_api_gateway_method.cards_purchase_method.http_method
+resource "aws_api_gateway_integration" "post_purchase_integration" {
+  rest_api_id = aws_api_gateway_rest_api.banking_api.id
+  resource_id = aws_api_gateway_resource.purchase.id
+  http_method = aws_api_gateway_method.post_purchase_method.http_method
+
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.card_purchase_lambda.invoke_arn
+  uri                     = aws_lambda_function.card_purchase.invoke_arn
 }
 
 # Permisos Lambda para API Gateway
-resource "aws_lambda_permission" "api_gateway_permission_cards_purchase" {
-  statement_id  = "AllowAPIGatewayInvokeCardPurchase"
+resource "aws_lambda_permission" "api_gateway_purchase" {
+  statement_id  = "AllowExecutionFromAPIGatewayPurchase"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.card_purchase_lambda.function_name
+  function_name = aws_lambda_function.card_purchase.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.banking_api.execution_arn}/*/POST/cards/purchase"
 }
 
 # --- Recurso /transactions/save/{card_id} ---
@@ -461,6 +462,98 @@ resource "aws_lambda_permission" "api_gateway_permission_card_paid" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.banking_api.execution_arn}/*/POST/cards/paid/*"
 }
+
+resource "aws_api_gateway_resource" "catalog_resource" {
+  rest_api_id = aws_api_gateway_rest_api.banking_api.id
+  parent_id   = aws_api_gateway_rest_api.banking_api.root_resource_id
+  path_part   = "catalog"
+}
+
+resource "aws_api_gateway_resource" "catalog_update_resource" {
+  rest_api_id = aws_api_gateway_rest_api.banking_api.id
+  parent_id   = aws_api_gateway_resource.catalog_resource.id
+  path_part   = "update"
+}
+
+
+resource "aws_api_gateway_method" "catalog_update_method" {
+  rest_api_id   = aws_api_gateway_rest_api.banking_api.id
+  resource_id   = aws_api_gateway_resource.catalog_update_resource.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+
+resource "aws_api_gateway_integration" "catalog_update_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.banking_api.id
+  resource_id             = aws_api_gateway_resource.catalog_update_resource.id
+  http_method             = aws_api_gateway_method.catalog_update_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.catalog_update.invoke_arn
+}
+
+resource "aws_lambda_permission" "catalog_update_permission" {
+  statement_id  = "AllowAPIGatewayInvokeCatalogUpdate"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.catalog_update.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.banking_api.execution_arn}/*/POST/catalog/update"
+}
+
+resource "aws_api_gateway_method" "catalog_get_method" {
+  rest_api_id   = aws_api_gateway_rest_api.banking_api.id
+  resource_id   = aws_api_gateway_resource.catalog_resource.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "catalog_get_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.banking_api.id
+  resource_id             = aws_api_gateway_resource.catalog_resource.id
+  http_method             = aws_api_gateway_method.catalog_get_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.catalog_get.invoke_arn
+}
+
+resource "aws_lambda_permission" "catalog_get_permission" {
+  statement_id  = "AllowAPIGatewayInvokeCatalogGet"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.catalog_get.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.banking_api.execution_arn}/*/GET/catalog"
+}
+
+resource "aws_api_gateway_resource" "payment" {
+  rest_api_id = aws_api_gateway_rest_api.banking_api.id
+  parent_id   = aws_api_gateway_rest_api.banking_api.root_resource_id
+  path_part   = "payment"
+}
+
+resource "aws_api_gateway_method" "payment_post" {
+  rest_api_id   = aws_api_gateway_rest_api.banking_api.id
+  resource_id   = aws_api_gateway_resource.payment.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "payment_integration" {
+  rest_api_id = aws_api_gateway_rest_api.banking_api.id
+  resource_id = aws_api_gateway_resource.payment.id
+  http_method = aws_api_gateway_method.payment_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.payment.invoke_arn
+}
+
+resource "aws_lambda_permission" "api_gateway_payment" {
+  statement_id  = "AllowAPIGatewayInvokePayment"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.payment.function_name
+  principal     = "apigateway.amazonaws.com"
+}
 # Deployment + Stage
 resource "aws_api_gateway_deployment" "banking_api_deployment" {
   rest_api_id = aws_api_gateway_rest_api.banking_api.id
@@ -472,9 +565,12 @@ resource "aws_api_gateway_deployment" "banking_api_deployment" {
     aws_api_gateway_integration.upload_avatar_integration,
     aws_api_gateway_integration.get_profile,
     aws_api_gateway_integration.get_cards_integration,
-    aws_api_gateway_integration.cards_purchase_integration,
+        aws_api_gateway_integration.post_purchase_integration,
     aws_api_gateway_integration.transactions_save_integration,
-     aws_api_gateway_integration.card_paid_integration
+     aws_api_gateway_integration.card_paid_integration,
+     aws_api_gateway_integration.catalog_update_integration,
+     aws_api_gateway_integration.catalog_get_integration,
+     aws_api_gateway_integration.payment_integration
   ]
 
   triggers = {
@@ -496,3 +592,4 @@ resource "aws_api_gateway_stage" "dev_stage" {
 output "api_invoke_url" {
   value = "${aws_api_gateway_stage.dev_stage.invoke_url}/register"
 }
+
