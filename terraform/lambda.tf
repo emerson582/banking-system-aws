@@ -263,3 +263,28 @@ resource "aws_lambda_function" "transaction" {
     }
   }
 }
+
+data "archive_file" "get_status_zip" {
+  type        = "zip"
+  source_dir  = "../lambdas/lambdas-payment/get-status"
+  output_path = "../lambdas/lambdas-payment/get-status.zip"
+}
+
+resource "aws_lambda_function" "get_status" {
+  function_name = "get-status"
+  filename      = data.archive_file.get_status_zip.output_path
+  source_code_hash = data.archive_file.get_status_zip.output_base64sha256
+
+  handler = "index.handler"
+  runtime = "nodejs18.x"
+  role    = aws_iam_role.lambda_role.arn
+
+  timeout = 10
+
+  environment {
+    variables = {
+      PAYMENT_TABLE = "payment-table"
+      REGION        = "us-east-1"
+    }
+  }
+}

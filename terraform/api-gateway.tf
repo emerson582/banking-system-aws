@@ -554,6 +554,45 @@ resource "aws_lambda_permission" "api_gateway_payment" {
   function_name = aws_lambda_function.payment.function_name
   principal     = "apigateway.amazonaws.com"
 }
+
+resource "aws_api_gateway_resource" "status_resource" {
+  rest_api_id = aws_api_gateway_rest_api.banking_api.id
+  parent_id   = aws_api_gateway_rest_api.banking_api.root_resource_id
+  path_part   = "status"
+}
+
+resource "aws_api_gateway_resource" "status_trace_resource" {
+  rest_api_id = aws_api_gateway_rest_api.banking_api.id
+  parent_id   = aws_api_gateway_resource.status_resource.id
+  path_part   = "{traceId}"
+}
+
+resource "aws_api_gateway_method" "status_get_method" {
+  rest_api_id   = aws_api_gateway_rest_api.banking_api.id
+  resource_id   = aws_api_gateway_resource.status_trace_resource.id
+  http_method   = "GET"
+  authorization = "NONE"
+
+  request_parameters = {
+    "method.request.path.traceId" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "status_get_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.banking_api.id
+  resource_id             = aws_api_gateway_resource.status_trace_resource.id
+  http_method             = aws_api_gateway_method.status_get_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.get_status.invoke_arn
+}
+resource "aws_lambda_permission" "api_gateway_status" {
+  statement_id  = "AllowAPIGatewayInvokeStatus"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_status.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.banking_api.execution_arn}/*/GET/status/*"
+}
 # Deployment + Stage
 resource "aws_api_gateway_deployment" "banking_api_deployment" {
   rest_api_id = aws_api_gateway_rest_api.banking_api.id
@@ -570,7 +609,8 @@ resource "aws_api_gateway_deployment" "banking_api_deployment" {
      aws_api_gateway_integration.card_paid_integration,
      aws_api_gateway_integration.catalog_update_integration,
      aws_api_gateway_integration.catalog_get_integration,
-     aws_api_gateway_integration.payment_integration
+     aws_api_gateway_integration.payment_integration,
+     aws_api_gateway_integration.status_get_integration
   ]
 
   triggers = {
